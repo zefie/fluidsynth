@@ -263,6 +263,14 @@ void fluid_private_set(fluid_private_t priv, void *value)
     private_data[priv] = value;
 }
 
+#ifdef __EMSCRIPTEN__
+int fluid_stat(const char *_path, fluid_stat_buf_t *buffer)
+{
+    // stat is not supported in Emscripten, return 0 modification time
+    buffer->st_mtime = 0;
+    return FLUID_OK;
+}
+#else
 #if HAVE_CXX_FILESYSTEM
 
 #include <filesystem>
@@ -289,3 +297,4 @@ int fluid_stat(const char *_path, fluid_stat_buf_t *buffer)
     buffer->st_mtime = 0;
     return FLUID_FAILED;
 }
+#endif
