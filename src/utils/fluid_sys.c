@@ -442,7 +442,13 @@ fluid_thread_self_set_prio(int prio_level)
         DosSetPriority(PRTYS_THREAD, PRTYC_REGULAR, PRTYD_MAXIMUM, 0);
     }
 }
-
+#elif defined(__EMSCRIPTEN__)  /* Emscripten specific stuff */
+void
+fluid_thread_self_set_prio(int prio_level)
+{
+    /* No-op, as Emscripten does not support thread priorities */
+    (void)prio_level;
+}
 #else /* POSIX stuff..  Nice POSIX..  Good POSIX. */
 
 void
