@@ -39,6 +39,10 @@
 #include <android/log.h>
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 /* WIN32 HACK - Flag used to differentiate between a file descriptor and a socket.
  * Should work, so long as no SOCKET or file descriptor ends up with this bit set. - JG */
 #ifdef _WIN32
@@ -154,6 +158,33 @@ fluid_default_log_function(int level, const char *message, void *data)
         __android_log_print(ANDROID_LOG_VERBOSE, fluid_libname, "%s", message);
         break;
     }
+#elif __EMSCRIPTEN__
+    switch(level)
+    {
+    case FLUID_PANIC:
+        EM_ASM_({ console.error(UTF8ToString($0) + ": panic: " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+
+    case FLUID_ERR:
+        EM_ASM_({ console.error(UTF8ToString($0) + ": error: " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+
+    case FLUID_WARN:
+        EM_ASM_({ console.warn(UTF8ToString($0) + ": warning: " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+
+    case FLUID_INFO:
+        EM_ASM_({ console.info(UTF8ToString($0) + ": " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+
+    case FLUID_DBG:
+        EM_ASM_({ console.debug(UTF8ToString($0) + ": debug: " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+
+    default:
+        EM_ASM_({ console.log(UTF8ToString($0) + ": " + UTF8ToString($1)); }, fluid_libname, message);
+        break;
+    }   
 #else
     FILE *out;
 

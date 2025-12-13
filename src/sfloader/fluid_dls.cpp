@@ -710,7 +710,27 @@ fluid_dls_font::visit_subchunks(fluid_long_long_t offset, uint32_t expected_4cc,
         RIFFChunk subchunk;
         fseek(pos, SEEK_SET);
         auto subchunkpos = pos;
-        auto headersize = READCHUNK(this, subchunk);
+        
+        int headersize;
+        try
+        {
+            headersize = READCHUNK(this, subchunk);
+        }
+        catch(const std::runtime_error &e)
+        {
+            // If we encounter EOF while reading a chunk header, the file is likely truncated
+            // Break gracefully instead of propagating the error
+            std::string error_msg = e.what();
+            if(error_msg.find("Failed when reading chunk") != std::string::npos ||
+               error_msg.find("Failed when reading FOURCC ID") != std::string::npos)
+            {
+                FLUID_LOG(FLUID_WARN, "Reached end of file while reading chunk headers in LIST '" FMT_4CC_SPEC "' - file may be truncated",
+                         FMT_4CC_ARG(chunk.id));
+                break;
+            }
+            throw; // Re-throw if it's a different error
+        }
+        
         pos += headersize;
 
         try
@@ -1510,7 +1530,10 @@ fluid_dls_font::fluid_dls_font(fluid_synth_t *synth,
 
     if(chunk.size + 8 > filesize)
     {
-        throw std::runtime_error{ "DLS file early EOF" };
+        FLUID_LOG(FLUID_WARN, "DLS file early EOF - file may be truncated (expected %llu, got %llu bytes)",
+                  static_cast<unsigned long long>(chunk.size + 8),
+                  static_cast<unsigned long long>(filesize));
+        // Continue parsing with actual file size
     }
 
     if(chunk.size + 8 < filesize)
@@ -1518,8 +1541,8 @@ fluid_dls_font::fluid_dls_font(fluid_synth_t *synth,
         FLUID_LOG(FLUID_WARN, "DLS file has extra data after RIFF chunk");
     }
 
-    // we don't care about real file size after this point
-    filesize = chunk.size + 8;
+    // we don't care about real file size after this point, but cap it at actual size
+    filesize = std::min(static_cast<fluid_long_long_t>(chunk.size + 8), filesize);
 
     // iterate over chunks in the RIFF form
     try
@@ -2366,7 +2389,16 @@ inline void fluid_dls_font::parse_lins(fluid_long_long_t offset)
         }
 
         auto &instrument = instruments.emplace_back();
-        parse_ins(pos, instrument);
+        try
+        {
+            parse_ins(pos, instrument);
+        }
+        catch(const std::exception &exc)
+        {
+            FLUID_LOG(FLUID_WARN, "Failed to parse instrument at offset 0x%llx, skipping: %s",
+                      static_cast<unsigned long long>(pos), exc.what());
+            instruments.pop_back();  // Remove the failed instrument
+        }
     }
                    );
     // clang-format on
@@ -2577,11 +2609,20 @@ inline void fluid_dls_font::parse_lrgn(fluid_long_long_t offset, fluid_dls_instr
         case RGN2_FCC:
         {
             auto &region = instrument.regions.emplace_back();
-
-            if(!parse_rgn(pos, region))  // bypassed by cdl
+            
+            try
             {
-                FLUID_LOG(FLUID_DBG, "Region ofs=0x%llx is bypassed by cdl", pos);
-                instrument.regions.pop_back();
+                if(!parse_rgn(pos, region))  // bypassed by cdl
+                {
+                    FLUID_LOG(FLUID_DBG, "Region ofs=0x%llx is bypassed by cdl", pos);
+                    instrument.regions.pop_back();
+                }
+            }
+            catch(const std::exception &exc)
+            {
+                FLUID_LOG(FLUID_WARN, "Failed to parse region at offset 0x%llx, skipping: %s",
+                          static_cast<unsigned long long>(pos), exc.what());
+                instrument.regions.pop_back();  // Remove the failed region
             }
 
             break;
@@ -2626,8 +2667,11 @@ inline bool fluid_dls_font::parse_rgn(fluid_long_long_t offset, fluid_dls_region
 
                 if(region.sampleindex >= samples.size())
                 {
-                    throw std::runtime_error{ string_format("Sample index %u is out of range",
-                                                            static_cast<unsigned>(region.sampleindex)) };
+                    FLUID_LOG(FLUID_WARN, "Sample index %u is out of range (max %zu), skipping region",
+                              static_cast<unsigned>(region.sampleindex),
+                              samples.size());
+                    bypassed = true;
+                    throw std::exception{};  // Signal to skip this region
                 }
 
                 break;
