@@ -33,10 +33,7 @@ ADD_FLUID_TEST(test_utf8_open)
 ADD_FLUID_TEST(test_portamento_time)
 ADD_FLUID_TEST(test_modulator)
 ADD_FLUID_TEST(test_default_mod)
-ADD_FLUID_TEST(test_synth_render_s16)
-ADD_FLUID_TEST(test_synth_render_s24)
-ADD_FLUID_TEST(test_synth_render_s32)
-ADD_FLUID_TEST(test_round_clip)
+ADD_FLUID_TEST(test_ABI)
 
 if ( GLIB_SUPPORT AND GLib2_VERSION VERSION_GREATER_EQUAL 2.33.12 )
     # Earlier versions of GLib had broken comment handling and should not be compared to
