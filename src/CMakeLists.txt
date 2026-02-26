@@ -1,6 +1,6 @@
 # FluidSynth - A Software Synthesizer
 #
-# Copyright (C) 2003-2025 Peter Hanappe and others.
+# Copyright (C) 2003-2026 Peter Hanappe and others.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public License
@@ -176,6 +176,7 @@ set ( libfluidsynth_SOURCES
     synth/fluid_synth.c
     synth/fluid_synth.h
     synth/fluid_synth_monopoly.c
+    synth/fluid_synth_write_int.cpp
     synth/fluid_tuning.c
     synth/fluid_tuning.h
     synth/fluid_voice.c
@@ -192,12 +193,30 @@ set ( libfluidsynth_SOURCES
     drivers/fluid_adriver.h
     drivers/fluid_mdriver.c
     drivers/fluid_mdriver.h
+    drivers/fluid_audio_convert.cpp
     bindings/fluid_cmd.c
     bindings/fluid_cmd.h
     bindings/fluid_filerenderer.c
     bindings/fluid_ladspa.c
     bindings/fluid_ladspa.h
 )
+
+if ( LIMITER_SUPPORT )
+  set ( fulid_limiter_SOURCES
+      rvoice/fluid_limiter.c
+      rvoice/fluid_limiter.h
+      rvoice/fluid_limiter_impl.h
+  )
+  add_library(fluid_limiter_impl-OBJ OBJECT
+    rvoice/fluid_limiter_impl.cpp
+  )
+  target_include_directories(fluid_limiter_impl-OBJ PRIVATE
+    ${FluidSynth_BINARY_DIR}
+    ${FluidSynth_BINARY_DIR}/include
+    ${FluidSynth_SOURCE_DIR}/include
+  )
+  target_link_libraries(fluid_limiter_impl-OBJ PRIVATE signalsmith-basics)
+endif ( LIMITER_SUPPORT )
 
 set ( fluid_osal_SOURCES utils/fluid_sys_${osal}.h )
 if ( osal STREQUAL "cpp11" )
@@ -285,6 +304,7 @@ add_library ( libfluidsynth-OBJ OBJECT
     ${public_HEADERS}
     ${public_main_HEADER}
     ${VersionFilesOutputVariable}
+    ${fulid_limiter_SOURCES}
 )
 
 target_include_directories ( libfluidsynth-OBJ PRIVATE
@@ -321,6 +341,7 @@ endif ( MACOSX_FRAMEWORK )
 # them correctly in case of MACOSX_FRAMEWORK
 add_library ( libfluidsynth
     $<TARGET_OBJECTS:libfluidsynth-OBJ>
+    $<$<BOOL:${LIMITER_SUPPORT}>:$<TARGET_OBJECTS:fluid_limiter_impl-OBJ>>
     ${public_main_HEADER}
     ${public_HEADERS}
     ${MACOSX_FRAMEWORK_SOURCE_HACK}
@@ -573,7 +594,7 @@ if ( MACOSX_FRAMEWORK )
     ARCHIVE DESTINATION "${FRAMEWORK_INSTALL_PREFIX}/${FRAMEWORK_INSTALL_DIR}" COMPONENT ${PACKAGE}_development
   )
 else ( MACOSX_FRAMEWORK )
-  install ( TARGETS fluidsynth 
+  install ( TARGETS fluidsynth
     EXPORT FluidSynthTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT ${PACKAGE}_program
   )
