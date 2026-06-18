@@ -33,9 +33,16 @@ ADD_FLUID_TEST(test_utf8_open)
 ADD_FLUID_TEST(test_portamento_time)
 ADD_FLUID_TEST(test_modulator)
 ADD_FLUID_TEST(test_default_mod)
+ADD_FLUID_TEST(test_synth_render_s16)
+ADD_FLUID_TEST(test_synth_render_s24)
+ADD_FLUID_TEST(test_synth_render_s32)
+ADD_FLUID_TEST(test_round_clip)
 ADD_FLUID_TEST(test_ABI)
 ADD_FLUID_TEST(test_file_seek_tell)
 ADD_FLUID_TEST(test_shell_server_auto_port)
+ADD_FLUID_TEST(test_sample_pitch_calculation)
+ADD_FLUID_TEST(test_mts_cc_tuning)
+ADD_FLUID_TEST(test_voice_callback)
 
 if ( GLIB_SUPPORT AND GLib2_VERSION VERSION_GREATER_EQUAL 2.33.12 )
     # Earlier versions of GLib had broken comment handling and should not be compared to
@@ -468,11 +475,23 @@ add_custom_target(renderDMOD
 )
 
 add_custom_target(renderRPN
-    COMMAND ${MANUAL_TEST_FLUIDSYNTH} -R 0 -C 0 -g 1.1 -F "${RPN_RENDER_DIR}/SA2 - Prison Lane -- MIDIMan - FluidSynth Test.mid.${FEXT}" ${GENERAL_USER_GS2} "FluidSynth.pitch.bend.fine.tuning.bug.demonstration/SA2 - Prison Lane -- MIDIMan - FluidSynth Test.mid"
     COMMENT "Rendering Test MIDI for RPNs"
     DEPENDS ${MANUAL_TEST_DEPENDS} create_out_dir
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/manual/rpn/"
-    VERBATIM
+)
+set_target_properties(renderRPN PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/manual/rpn"
+)
+add_render_job(renderRPN
+    "${RPN_RENDER_DIR}/SA2 - Prison Lane -- MIDIMan - FluidSynth Test.${FEXT}"
+    -R 0 -C 0 -g 1.1 ${GENERAL_USER_GS2} "FluidSynth.pitch.bend.fine.tuning.bug.demonstration/SA2 - Prison Lane -- MIDIMan - FluidSynth Test.mid"
+)
+add_render_job(renderRPN
+    "${RPN_RENDER_DIR}/modulation-range/test-rpn-00-05-modulation-depth-range.${FEXT}"
+    -R 0 -C 0 -g 1.9 ${GENERAL_USER_GS2} "modulation-range/test-rpn-00-05-modulation-depth-range.mid"
+)
+add_render_job(renderRPN
+    "${RPN_RENDER_DIR}/modulation-range/mod-rpn-no-mod-wheel.${FEXT}"
+    -R 0 -C 0 -g 1.4 modulation-range/vib.sf2 "modulation-range/mod-rpn-no-mod-wheel.mid"
 )
 
 set(_gsdt1_demos
@@ -549,28 +568,48 @@ else ( LIBINSTPATCH_SUPPORT OR ENABLE_NATIVE_DLS )
     )
 endif (LIBINSTPATCH_SUPPORT OR ENABLE_NATIVE_DLS )
 
-# Add a dependency so that rendering targets depends on check_manual
-add_dependencies(check_manual render1415)
-add_dependencies(check_manual render1417)
-add_dependencies(check_manual render1424)
-add_dependencies(check_manual render1427)
-add_dependencies(check_manual renderAltitude)
-add_dependencies(check_manual renderFilter)
-add_dependencies(check_manual renderUplift)
-add_dependencies(check_manual renderChrisNRPN)
-add_dependencies(check_manual renderHybridCol)
-add_dependencies(check_manual renderPortamento)
-add_dependencies(check_manual renderSfSpecTest)
-add_dependencies(check_manual render1455)
-add_dependencies(check_manual renderDK64JJU)
-add_dependencies(check_manual renderExcl)
-add_dependencies(check_manual rendere1m1)
-add_dependencies(check_manual renderdspInterp)
-add_dependencies(check_manual render1484)
+
+add_custom_target(renderMtsTests
+    COMMENT "Rendering Midi Tuning Standard Tests"
+    DEPENDS ${MANUAL_TEST_DEPENDS} create_out_dir
+)
+set_target_properties(renderMtsTests PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/manual/mts/"
+)
+add_render_job(renderMtsTests
+    "${MTS_RENDER_DIR}/issue102_orig.${FEXT}"
+    -R 0 -C 0 -g 2 -o synth.device-id=0 ${GENERAL_USER_GS2} issue102_orig/mts.mid
+)
+add_render_job(renderMtsTests
+    "${MTS_RENDER_DIR}/issue102_marcus.${FEXT}"
+    -R 0 -C 0 -g 3  ${GENERAL_USER_GS2} issue102_marcus/mts_marcus.mid
+)
+
+# Add a dependency so that rendering targets depends on check_rendering
+add_dependencies(check_rendering render1415)
+add_dependencies(check_rendering render1417)
+add_dependencies(check_rendering render1424)
+add_dependencies(check_rendering render1427)
+add_dependencies(check_rendering renderAltitude)
+add_dependencies(check_rendering renderFilter)
+add_dependencies(check_rendering renderUplift)
+add_dependencies(check_rendering renderChrisNRPN)
+add_dependencies(check_rendering renderHybridCol)
+add_dependencies(check_rendering renderPortamento)
+add_dependencies(check_rendering renderSfSpecTest)
+add_dependencies(check_rendering render1455)
+add_dependencies(check_rendering renderDK64JJU)
+add_dependencies(check_rendering renderExcl)
+add_dependencies(check_rendering rendere1m1)
+add_dependencies(check_rendering renderdspInterp)
+add_dependencies(check_rendering render1484)
 add_dependencies(check_manual renderRealtimeIIR)
-add_dependencies(check_manual render1481)
-add_dependencies(check_manual renderStreetwise)
-add_dependencies(check_manual renderGeneralUserDemo)
-add_dependencies(check_manual renderBankSelect)
-add_dependencies(check_manual renderDMOD)
-add_dependencies(check_manual renderRPN)
+add_dependencies(check_rendering render1481)
+add_dependencies(check_rendering renderStreetwise)
+add_dependencies(check_rendering renderGeneralUserDemo)
+add_dependencies(check_rendering renderBankSelect)
+add_dependencies(check_rendering renderDMOD)
+add_dependencies(check_rendering renderRPN)
+add_dependencies(check_rendering renderMtsTests)
+# Temporarily disable limiter tests, because those tests will fail with reference fluidsynth 2.5.x, as it is lacking the limiter
+add_dependencies(check_rendering renderLimiterTests)

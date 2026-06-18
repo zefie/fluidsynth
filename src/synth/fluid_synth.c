@@ -87,6 +87,7 @@ static int fluid_synth_update_channel_pressure_LOCAL(fluid_synth_t *synth, int c
 static int fluid_synth_update_key_pressure_LOCAL(fluid_synth_t *synth, int chan, int key);
 static int fluid_synth_update_pitch_bend_LOCAL(fluid_synth_t *synth, int chan);
 static int fluid_synth_update_pitch_wheel_sens_LOCAL(fluid_synth_t *synth, int chan);
+static int fluid_synth_update_modulation_depth_range_LOCAL(fluid_synth_t *synth, int chan);
 static int fluid_synth_set_preset(fluid_synth_t *synth, int chan,
                                   fluid_preset_t *preset);
 static int fluid_synth_reverb_get_param(fluid_synth_t *synth, int fx_group,
@@ -1730,7 +1731,7 @@ fluid_synth_remove_default_mod(fluid_synth_t *synth, const fluid_mod_t *mod)
  * Send a MIDI controller event on a MIDI channel.
  *
  * Most CCs are 7-bits wide in FluidSynth. There are a few exceptions which may be 14-bits wide as are documented here:
- * https://github.com/FluidSynth/fluidsynth/wiki/FluidFeatures#midi-control-change-implementation-chart
+ * https://www.fluidsynth.org/wiki/FluidFeatures#midi-control-change-implementation-chart
  *
  * @param synth FluidSynth instance
  * @param chan MIDI channel number (0 to MIDI channel count - 1)
@@ -2107,6 +2108,15 @@ fluid_synth_cc_LOCAL(fluid_synth_t *synth, int channum, int num)
                 break;
 
             case RPN_MODULATION_DEPTH_RANGE:
+                /* MSB = semitones, LSB = 1/128 semitones (cent fraction)
+                 * Default per GM2: 0 semitones + 64/128 = 50 cents
+                 * Ignored for "rhythm channels" */
+                if(chan->channel_type == CHANNEL_TYPE_MELODIC)
+                {
+                    fluid_channel_set_modulation_depth_range(chan,
+                        msb_value * 100.0f + lsb_value * 100.0f / 128.0f);
+                    fluid_synth_update_modulation_depth_range_LOCAL(synth, channum);
+                }
                 break;
             }
         }
@@ -3216,6 +3226,14 @@ fluid_synth_update_pitch_wheel_sens_LOCAL(fluid_synth_t *synth, int chan)
     return fluid_synth_modulate_voices_LOCAL(synth, chan, 0, FLUID_MOD_PITCHWHEELSENS);
 }
 
+/* Local synthesis thread variant: update voices after modulation depth range RPN change.
+ * Re-applies GEN_VIBLFOTOPITCH and GEN_MODLFOTOPITCH with the new channel multiplier. */
+static int
+fluid_synth_update_modulation_depth_range_LOCAL(fluid_synth_t *synth, int chan)
+{
+    return fluid_synth_modulate_voices_LOCAL(synth, chan, 1, MODULATION_MSB);
+}
+
 /**
  * Get MIDI pitch wheel sensitivity on a MIDI channel.
  * @param synth FluidSynth instance
@@ -3766,7 +3784,7 @@ fluid_synth_set_sample_rate_LOCAL(fluid_synth_t *synth, float sample_rate)
 
 /**
  * Set up an event to change the sample-rate of the synth during the next rendering call.
- * @warning This function is broken-by-design! Don't use it! Starting with fluidsynth 2.4.4 it's a no-op. Instead, specify the sample-rate when creating the synth.
+ * @important This function is broken-by-design! Don't use it! Starting with fluidsynth 2.4.4 it's a no-op. Instead, specify the sample-rate when creating the synth.
  * @deprecated As of fluidsynth 2.1.0 this function has been deprecated.
  * Changing the sample-rate is generally not considered to be a realtime use-case, as it always produces some audible artifact ("click", "pop") on the dry sound and effects (because LFOs for chorus and reverb need to be reinitialized).
  * The sample-rate change may also require memory allocation deep down in the effect units.
@@ -6233,12 +6251,12 @@ int fluid_synth_set_reverb_group_level(fluid_synth_t *synth, int fx_group,
  * @param fx_group Index of the fx group.
  *  Must be in the range <code>-1 to (fluid_synth_count_effects_groups()-1)</code>. If -1 the
  *  parameter will be applied to all fx groups.
- * @param enum indicating the parameter to set (#fluid_reverb_param).
+ * @param param parameter to set (FLUID_REVERB_ROOMSIZE, FLUID_REVERB_DAMP, FLUID_REVERB_WIDTH, FLUID_REVERB_LEVEL).
  *  FLUID_REVERB_ROOMSIZE, roomsize Reverb room size value (0.0-1.0)
  *  FLUID_REVERB_DAMP, reverb damping value (0.0-1.0)
  *  FLUID_REVERB_WIDTH, reverb width value (0.0-100.0)
  *  FLUID_REVERB_LEVEL, reverb level value (0.0-1.0)
- * @param value, parameter value
+ * @param value parameter value
  * @return #FLUID_OK on success, #FLUID_FAILED otherwise
  */
 int
@@ -6441,7 +6459,7 @@ int fluid_synth_get_reverb_group_level(fluid_synth_t *synth, int fx_group,
  * @param fx_group index of the fx group to get parameter value from.
  *  Must be in the range -1 to synth->effects_groups-1. If -1 get the
  *  parameter common to all fx groups.
- * @param enum indicating the parameter to get (#fluid_reverb_param).
+ * @param param parameter to get (FLUID_REVERB_ROOMSIZE, FLUID_REVERB_DAMP, FLUID_REVERB_WIDTH, FLUID_REVERB_LEVEL).
  *  FLUID_REVERB_ROOMSIZE, reverb room size value.
  *  FLUID_REVERB_DAMP, reverb damping value.
  *  FLUID_REVERB_WIDTH, reverb width value.
@@ -6712,7 +6730,7 @@ fluid_synth_set_chorus_group_type(fluid_synth_t *synth, int fx_group, int type)
  * @param fx_group Index of the fx group.
  *  Must be in the range <code>-1 to (fluid_synth_count_effects_groups()-1)</code>. If -1 the
  *  parameter will be applied to all groups.
- * @param enum indicating the parameter to set (#fluid_chorus_param).
+ * @param param parameter to set (FLUID_CHORUS_NR, FLUID_CHORUS_LEVEL, FLUID_CHORUS_SPEED, FLUID_CHORUS_DEPTH, FLUID_CHORUS_TYPE).
  *  FLUID_CHORUS_NR, chorus voice count (0-99, CPU time consumption proportional to
  *  this value).
  *  FLUID_CHORUS_LEVEL, chorus level (0.0-10.0).
@@ -6720,7 +6738,7 @@ fluid_synth_set_chorus_group_type(fluid_synth_t *synth, int fx_group, int type)
  *  FLUID_CHORUS_DEPTH, chorus depth (max value depends on synth sample-rate,
  *   0.0-21.0 is safe for sample-rate values up to 96KHz).
  *  FLUID_CHORUS_TYPE, chorus waveform type (#fluid_chorus_mod)
- * @param value, parameter value
+ * @param value parameter value
  * @return #FLUID_OK on success, #FLUID_FAILED otherwise.
  */
 int
@@ -6975,7 +6993,7 @@ fluid_synth_get_chorus_group_type(fluid_synth_t *synth, int fx_group, int *type)
  * Get chorus parameter value of one or all fx groups.
  * @param synth FluidSynth instance
  * @param fx_group index of the fx group
- * @param enum indicating the parameter to get.
+ * @param param parameter to get (FLUID_CHORUS_NR, FLUID_CHORUS_LEVEL, FLUID_CHORUS_SPEED, FLUID_CHORUS_DEPTH, FLUID_CHORUS_TYPE).
  *  FLUID_CHORUS_NR, chorus voice count.
  *  FLUID_CHORUS_LEVEL, chorus level.
  *  FLUID_CHORUS_SPEED, chorus speed.
@@ -7783,8 +7801,11 @@ fluid_synth_set_gen_LOCAL(fluid_synth_t *synth, int chan, int param, float value
  * This implementation is based on "Frequently Asked Questions for SB AWE32" http://archive.gamedev.net/archive/reference/articles/article445.html
  * as well as on the "SB AWE32 Developer's Information Pack" https://github.com/user-attachments/files/15757220/adip301.pdf
  *
+ * @param synth FluidSynth instance
+ * @param chan MIDI channel
  * @param gen the AWE32 effect or generator to manipulate
  * @param data the composed value of DATA_MSB and DATA_LSB
+ * @param data_lsb the value of DATA_LSB
  */
 static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan, int gen, int data, int data_lsb)
 {
@@ -7936,7 +7957,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_REVERBSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(&default_reverb_mod, data, 256, TRUE);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(&default_reverb_mod, data, 256, TRUE, NULL);
             FLUID_LOG(FLUID_DBG, "AWE32 Reverb: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_reverb_mod);
             break;
@@ -7944,7 +7965,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_CHORUSSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(&default_chorus_mod, data, 256, TRUE);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(&default_chorus_mod, data, 256, TRUE, NULL);
             FLUID_LOG(FLUID_DBG, "AWE32 Chorus: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_chorus_mod);
             break;
@@ -8713,7 +8734,10 @@ int fluid_synth_reset_basic_channel(fluid_synth_t *synth, int chan)
  * new basic channel group.
  * The function fails if the new group overlaps the next basic channel group.
  *
- * @param see fluid_synth_set_basic_channel.
+ * @param synth FluidSynth instance.
+ * @param basicchan starting MIDI channel for this basic channel group.
+ * @param mode behavior mode.
+ * @param val number of channels requested for this basic channel group.
  * @return
  * - On success, the effective number of channels for this new basic channel group,
  *   #FLUID_FAILED otherwise.

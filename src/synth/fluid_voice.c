@@ -322,6 +322,8 @@ fluid_voice_init(fluid_voice_t *voice, fluid_sample_t *sample,
     voice->mod_count = 0;
     voice->start_time = start_time;
     voice->has_noteoff = 0;
+    voice->callback = NULL;
+    voice->callback_data = NULL;
     UPDATE_RVOICE0(fluid_rvoice_reset);
 
     /*
@@ -463,6 +465,7 @@ void fluid_voice_start(fluid_voice_t *voice)
 /**
  * Calculate the amplitude of a voice.
  *
+ * @param voice the voice
  * @param gain The gain value in the range [0.0 ; 1.0]
  * @return An amplitude used by rvoice_mixer's buffers
  */
@@ -1325,6 +1328,11 @@ fluid_voice_release(fluid_voice_t *voice)
     unsigned int at_tick = fluid_channel_get_min_note_length_ticks(voice->channel);
     UPDATE_RVOICE_I1(fluid_rvoice_noteoff, at_tick);
     voice->has_noteoff = 1; // voice is marked as noteoff occurred
+
+    if(voice->callback != NULL)
+    {
+        voice->callback(voice, FLUID_VOICE_CALLBACK_NOTEOFF, voice->callback_data);
+    }
 }
 
 /*
@@ -1481,7 +1489,9 @@ fluid_voice_add_mod(fluid_voice_t *voice, fluid_mod_t *mod, int mode)
 /**
  * Adds a modulator to the voice.
  * local version of fluid_voice_add_mod function. Called at noteon time.
- * @param voice, mod, mode, same as for fluid_voice_add_mod() (see above).
+ * @param voice the voice
+ * @param mod the modulator to add
+ * @param mode the mode (see fluid_voice_add_mod)
  * @param check_limit_count is the modulator number limit to handle with existing
  *   identical modulator(i.e mode FLUID_VOICE_OVERWRITE, FLUID_VOICE_ADD).
  *   - When FLUID_NUM_MOD, all the voices modulators (since the previous call)
@@ -1628,6 +1638,46 @@ int fluid_voice_is_sustained(const fluid_voice_t *voice)
 int fluid_voice_is_sostenuto(const fluid_voice_t *voice)
 {
     return (voice->status == FLUID_VOICE_HELD_BY_SOSTENUTO);
+}
+
+/**
+ * Set a callback function for a voice to be notified about voice state changes.
+ *
+ * Only one callback function can be registered per voice. Setting a new callback
+ * replaces the previous one. Passing NULL as the callback removes any previously
+ * registered callback.
+ *
+ * The callback is automatically cleared when the voice is re-initialized for a
+ * new note.
+ *
+ * @param voice Voice instance
+ * @param callback Callback function to register, or NULL to unregister.
+ * @param data User-defined data pointer passed to the callback.
+ *
+ * @note This function should be called after fluid_synth_alloc_voice() and before
+ *       fluid_synth_start_voice() to be guaranteed to receive the callback.
+ *
+ * @since 2.6.0
+ */
+void fluid_voice_set_callback(fluid_voice_t *voice, fluid_voice_callback_t callback, void *data)
+{
+    fluid_rvoice_param_t param[MAX_EVENT_PARAMS];
+
+    fluid_return_if_fail(voice != NULL);
+
+    voice->callback = callback;
+    voice->callback_data = data;
+
+    /* Propagate to the rvoice so the finished callback fires from the
+     * render thread immediately when the voice finishes, rather than
+     * being deferred to the next API call.
+     */
+    param[0].ptr = (void *)callback;
+    param[1].ptr = voice;
+    param[2].ptr = data;
+    fluid_rvoice_eventhandler_push(voice->eventhandler,
+                                   fluid_rvoice_set_finished_callback,
+                                   voice->rvoice, param);
 }
 
 /**

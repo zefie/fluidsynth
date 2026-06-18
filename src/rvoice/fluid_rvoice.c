@@ -292,9 +292,9 @@ fluid_rvoice_check_sample_sanity(fluid_rvoice_t *voice)
  * Synthesize a voice to a buffer.
  *
  * @param voice rvoice to synthesize
- * @param dsp_buf Audio buffer to synthesize to (#FLUID_BUFSIZE in length)
+ * @param dsp_buf Audio buffer to synthesize to (FLUID_BUFSIZE in length)
  * @return Count of samples written to dsp_buf. (-1 means voice is currently
- * quiet, 0 .. #FLUID_BUFSIZE-1 means voice finished.)
+ * quiet, 0 .. FLUID_BUFSIZE-1 means voice finished.)
  *
  * Panning, reverb and chorus are processed separately. The dsp interpolation
  * routine is in (fluid_rvoice_dsp.c).
@@ -573,6 +573,11 @@ DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_reset)
     fluid_iir_filter_reset(&voice->resonant_filter);
     fluid_iir_filter_reset(&voice->resonant_custom_filter);
 
+    /* Clear finished callback */
+    voice->finished_cb = NULL;
+    voice->finished_cb_voice = NULL;
+    voice->finished_cb_data = NULL;
+
     /* Force setting of the phase at the first DSP loop run
      * This cannot be done earlier, because it depends on modulators.
        [DH] Is that comment really true? */
@@ -682,8 +687,7 @@ static FLUID_INLINE void fluid_rvoice_local_retrigger_attack(fluid_rvoice_t *voi
 /**
  * Used by legato Mode : multi_retrigger
  *  see fluid_synth_noteon_mono_legato_multi_retrigger()
- * @param voice the synthesis voice to be updated
-*/
+ */
 DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_multi_retrigger_attack)
 {
     fluid_rvoice_t *voice = obj;
@@ -738,15 +742,12 @@ DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_multi_retrigger_attack)
 
 /**
  * sets the portamento dsp parameters: dsp.pitchoffset, dsp.pitchinc
- * @param voice rvoice to set portamento.
- * @param countinc increment count number.
- * @param pitchoffset pitch offset to apply to voice dsp.pitch.
  *
  * Notes:
  * 1) To get continuous portamento between consecutive noteOn (n1,n2,n3...),
  *   pitchoffset is accumulated in current dsp pitchoffset.
  * 2) And to get constant portamento duration, dsp pitch increment is updated.
-*/
+ */
 DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_set_portamento)
 {
     fluid_rvoice_t *voice = obj;
@@ -943,6 +944,16 @@ DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_voiceoff)
 
     fluid_adsr_env_set_section(&voice->envlfo.volenv, FLUID_VOICE_ENVFINISHED);
     fluid_adsr_env_set_section(&voice->envlfo.modenv, FLUID_VOICE_ENVFINISHED);
+}
+
+
+DECLARE_FLUID_RVOICE_FUNCTION(fluid_rvoice_set_finished_callback)
+{
+    fluid_rvoice_t *voice = obj;
+
+    voice->finished_cb = (fluid_voice_callback_t) param[0].ptr;
+    voice->finished_cb_voice = param[1].ptr;
+    voice->finished_cb_data = param[2].ptr;
 }
 
 
