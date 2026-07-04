@@ -1730,7 +1730,7 @@ fluid_dls_font::fluid_dls_font(fluid_synth_t *synth,
     bool invalid_loops_were_sanitized = false;
     for(auto &sample : samples)
     {
-        fluid_sample_t fluid;
+        fluid_sample_t fluid{};
         fluid.start = sample.start;
         fluid.end = sample.end - 1;
         fluid.samplerate = sample.samplerate;
