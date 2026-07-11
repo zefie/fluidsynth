@@ -413,7 +413,7 @@ Developers:
             <def>dat</def>
             <vals>fdn, free, lex, dat, smith</vals>
             <desc>
-                Introduced in version 2.6.0, this setting selects the reverb engine to use. The engine selection applies at synth creation only and cannot be changed during the lifetime of a synth. An overview of those reverb engines is available in the <a href="https://www.fluidsynth.org/wiki/reverbators/">API documentation.</a>
+                Introduced in version 2.6.0, this setting selects the reverb engine to use. The engine selection applies at synth creation only and cannot be changed during the lifetime of a synth. An overview of those reverb engines is available in the <a href="https://www.fluidsynth.org/wiki/reverbators/">wiki.</a>
                 <note>
                 Not all reverb engines may be present in all versions of fluidsynth. E.g. the <code>smith</code> engine requires FluidSynth to be compiled with Signalsmith Audio Basics support. Therefore, implementations are advised to query this setting for available options using <code>fluid_settings_foreach_option()</code>.
                 </note>

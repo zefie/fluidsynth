@@ -203,8 +203,20 @@ For legacy FluidSynth 1.1 pls. refer to FluidSynths man page at that time.&#xa;<
     <xsl:for-each select="$node/node()">
       <xsl:choose>
         <xsl:when test="self::text()">
-          <!-- Normalise leading/trailing whitespace in text nodes -->
-          <xsl:value-of select="normalize-space(.)"/>
+          <!-- Collapse internal whitespace but preserve a single boundary space
+               so that inline elements (code, a, …) are not glued to surrounding text. -->
+          <xsl:variable name="normalized" select="normalize-space(.)"/>
+          <xsl:if test="$normalized != ''">
+            <!-- Re-emit one leading space when the original text node started with whitespace -->
+            <xsl:if test="normalize-space(substring(., 1, 1)) = ''">
+              <xsl:text> </xsl:text>
+            </xsl:if>
+            <xsl:value-of select="$normalized"/>
+            <!-- Re-emit one trailing space when the original text node ended with whitespace -->
+            <xsl:if test="normalize-space(substring(., string-length(.), 1)) = ''">
+              <xsl:text> </xsl:text>
+            </xsl:if>
+          </xsl:if>
         </xsl:when>
         <xsl:when test="self::*[name()='br' or name()='BR']">
           <xsl:choose>
