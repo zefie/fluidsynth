@@ -1,5 +1,14 @@
 # 📝 Release Notes
 
+## FluidSynth 2.5.6
+
+* Fix CVE-2026-58264 - a heap-based buffer overrun in command handler (GHSA-mqmq-w63q-cj94)
+* Fix CVE-2026-61714 - a heap-based buffer overflow in MIDI player (GHSA-976m-35rw-h3m6)
+* Fix CVE-2026-61721 - a heap-based buffer overrun for DLS samples (GHSA-59ph-rx8r-8p4j)
+* Fix CVE-2026-61723 - a DLS `ptbl` chunk integer overflow (GHSA-r4mc-v3p8-pv47)
+* Fix CVE-2026-61722 - a DLS articulation chunk integer overflow (GHSA-hp72-35pr-6h6r)
+* Fix CVE-2026-61720 - a SF2 DMOD chunk integer underflow (GHSA-rmc4-c8hw-455w)
+
 ## FluidSynth 2.5.5
 
 * Fix a build issue on BigEndian architectures (#1783, thanks to @thesamesam)
